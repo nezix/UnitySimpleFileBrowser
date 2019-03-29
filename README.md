@@ -164,11 +164,14 @@ public class FileBrowserTest : MonoBehaviour
 		// Show a load file dialog and wait for a response from user
 		// Load file/folder: file, Initial path: default (Documents), Title: "Load File", submit button text: "Load"
 		yield return FileBrowser.WaitForLoadDialog( false, null, "Load File", "Load" );
-
-		// Dialog is closed
-		// Print whether a file is chosen (FileBrowser.Success)
-		// and the path to the selected file (FileBrowser.Result) (null, if FileBrowser.Success is false)
-		Debug.Log( FileBrowser.Success + " " + FileBrowser.Result );
+		
+		// Print the full path of all selected files
+		if( FileBrowser.Success ) {
+			foreach(string p in FileBrowser.Results){
+				Debug.Log(p);
+			}
+			// FileBroser.Result contains the last selected file path
+		}
 	}
 }
 ```
