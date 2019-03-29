@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace SimpleFileBrowser
 {
@@ -106,6 +107,7 @@ namespace SimpleFileBrowser
 
 		public static bool Success { get; private set; }
 		public static string Result { get; private set; }
+		public static List<string> Results = new List<string>();
 
 		private static bool m_askPermissions = true;
 		public static bool AskPermissions
@@ -285,6 +287,8 @@ namespace SimpleFileBrowser
 			get { return m_currentPath; }
 			set
 			{
+				ClearSelectedFile();
+
 				if( value != null )
 					value = GetPathWithoutTrailingDirectorySeparator( value.Trim() );
 
@@ -345,38 +349,54 @@ namespace SimpleFileBrowser
 			}
 		}
 
-		private int m_selectedFilePosition = -1;
-		public int SelectedFilePosition { get { return m_selectedFilePosition; } }
+		public List<int> SelectedFilePositions = new List<int>();
+		public List<FileBrowserItem> SelectedFiles = new List<FileBrowserItem>();
 
-		private FileBrowserItem m_selectedFile;
-		private FileBrowserItem SelectedFile
-		{
-			get
-			{
-				return m_selectedFile;
-			}
-			set
-			{
-				if( value == null )
-				{
-					if( m_selectedFile != null )
-						m_selectedFile.Deselect();
+		public void AddFileToSelection(FileBrowserItem f){
 
-					m_selectedFilePosition = -1;
-					m_selectedFile = null;
+			if(SelectedFiles.Count != 0){
+				//Remove directory from selected items
+				for(int i = 0; i < SelectedFiles.Count; i++){
+					if(SelectedFiles[i].IsDirectory){
+						RemoveFromSelectedFiles(SelectedFiles[i]);
+					}
 				}
-				else if( m_selectedFilePosition != value.Position )
-				{
-					if( m_selectedFile != null )
-						m_selectedFile.Deselect();
+			}
+			SelectedFiles.Add(f);
+			SelectedFilePositions.Add(f.Position);
 
-					m_selectedFile = value;
-					m_selectedFilePosition = value.Position;
+			if( m_folderSelectMode || !SelectedFiles.Last().IsDirectory )
+				filenameInputField.text = f.Name;
 
-					if( m_folderSelectMode || !m_selectedFile.IsDirectory )
-						filenameInputField.text = m_selectedFile.Name;
+			f.Select();
+			UpdateInputFieldText();
+		}
+		public void RemoveFromSelectedFiles(FileBrowserItem f){
+			int id = SelectedFiles.IndexOf(f);
+			
+			if(id != -1) {
+				SelectedFiles[id].Deselect();
+				SelectedFiles.RemoveAt(id);
+				SelectedFilePositions.RemoveAt(id);
+			}
 
-					m_selectedFile.Select();
+			UpdateInputFieldText();
+		}
+
+		public void ClearSelectedFile(){
+			foreach(FileBrowserItem i in SelectedFiles){
+				i.Deselect();
+			}
+			SelectedFilePositions.Clear();
+			SelectedFiles.Clear();
+			UpdateInputFieldText();
+		}
+		public void UpdateInputFieldText(){
+			filenameInputField.text = "";
+			for(int i = 0; i < SelectedFiles.Count; i++){
+				filenameInputField.text += SelectedFiles[i].Name;
+				if(i != SelectedFiles.Count - 1){
+					filenameInputField.text += ";";
 				}
 			}
 		}
@@ -506,13 +526,13 @@ namespace SimpleFileBrowser
 			file.SetFile( icon, fileInfo.Name, isDirectory );
 			file.SetHidden( ( fileInfo.Attributes & FileAttributes.Hidden ) == FileAttributes.Hidden );
 
-			if( item.Position == m_selectedFilePosition )
-			{
-				m_selectedFile = file;
-				file.Select();
-			}
-			else
-				file.Deselect();
+			// if(SelectedFilePositions.Count != 0 && item.Position == SelectedFilePositions.Last() )
+			// {
+			// 	// m_selectedFile = file;
+			// 	// file.Select();
+			// }
+			// else
+			// 	file.Deselect();
 		}
 		#endregion
 
@@ -609,60 +629,81 @@ namespace SimpleFileBrowser
 		#region Button Events
 		public void OnBackButtonPressed()
 		{
-			if( currentPathIndex > 0 )
+			if( currentPathIndex > 0 ){
 				CurrentPath = pathsFollowed[--currentPathIndex];
+			}
 		}
 
 		public void OnForwardButtonPressed()
 		{
-			if( currentPathIndex < pathsFollowed.Count - 1 )
+			if( currentPathIndex < pathsFollowed.Count - 1 ){
 				CurrentPath = pathsFollowed[++currentPathIndex];
+			}
 		}
 
 		public void OnUpButtonPressed()
 		{
 			DirectoryInfo parentPath = Directory.GetParent( m_currentPath );
 
-			if( parentPath != null )
+			if( parentPath != null ){
 				CurrentPath = parentPath.FullName;
+			}
+
 		}
 
 		public void OnSubmitButtonClicked()
 		{
-			string path = m_currentPath;
-			if( filenameInputField.text.Length > 0 )
-				path = Path.Combine( path, filenameInputField.text );
+			string initpath = m_currentPath;
+			string path = initpath;
+			bool allFilesExist = true;
+			if(SelectedFiles.Count != 0){
+				
 
-			if( File.Exists( path ) )
-			{
-				if( !m_folderSelectMode )
-					OnOperationSuccessful( path );
-				else
-					filenameImage.color = wrongFilenameColor;
-			}
-			else if( Directory.Exists( path ) )
-			{
-				if( m_folderSelectMode )
-					OnOperationSuccessful( path );
-				else
-				{
-					if( m_currentPath == path )
-						filenameImage.color = wrongFilenameColor;
+				foreach(FileBrowserItem file in SelectedFiles){
+
+					path = Path.Combine(initpath, file.Name);
+
+					if( File.Exists( path ) )
+					{
+						if( !m_folderSelectMode )
+							Results.Add( path );
+						else{
+							allFilesExist = false;
+							filenameImage.color = wrongFilenameColor;
+						}
+					}
+					else if( Directory.Exists( path ) )
+					{
+						if( m_folderSelectMode )
+							Results.Add( path );
+						else
+						{
+							if( m_currentPath == path ){
+								filenameImage.color = wrongFilenameColor;
+								allFilesExist = false;
+							}
+							else
+								CurrentPath = path;
+						}
+					}
 					else
-						CurrentPath = path;
-				}
-			}
-			else
-			{
-				if( m_acceptNonExistingFilename )
-				{
-					if( !m_folderSelectMode && filters[filtersDropdown.value].defaultExtension != null )
-						path = Path.ChangeExtension( path, filters[filtersDropdown.value].defaultExtension );
+					{
+						if( m_acceptNonExistingFilename )
+						{
+							if( !m_folderSelectMode && filters[filtersDropdown.value].defaultExtension != null )
+								path = Path.ChangeExtension( path, filters[filtersDropdown.value].defaultExtension );
 
+							Results.Add( path );
+						}
+						else{
+							filenameImage.color = wrongFilenameColor;
+							allFilesExist = false;
+						}
+					}
+				}
+				if(allFilesExist){
 					OnOperationSuccessful( path );
 				}
-				else
-					filenameImage.color = wrongFilenameColor;
 			}
 		}
 
@@ -677,6 +718,7 @@ namespace SimpleFileBrowser
 		{
 			Success = true;
 			Result = path;
+			//Results is set in OnSubmitButtonClicked
 
 			Hide();
 
@@ -691,6 +733,7 @@ namespace SimpleFileBrowser
 		{
 			Success = false;
 			Result = null;
+			Results.Clear();
 
 			Hide();
 
@@ -729,7 +772,16 @@ namespace SimpleFileBrowser
 
 		public void OnItemSelected( FileBrowserItem item )
 		{
-			SelectedFile = item;
+			// SelectedFile = item;
+			if(SelectedFiles.Contains(item)){
+				RemoveFromSelectedFiles(item);
+			}
+			else{
+				if(item.IsDirectory){
+					ClearSelectedFile();
+				}
+				AddFileToSelection(item);
+			}
 		}
 
 		public void OnItemOpened( FileBrowserItem item )
@@ -758,7 +810,8 @@ namespace SimpleFileBrowser
 			if( AskPermissions )
 				RequestPermission();
 
-			SelectedFile = null;
+			// SelectedFile = null;
+			ClearSelectedFile();
 
 			m_searchString = string.Empty;
 			searchInputField.text = m_searchString;
@@ -812,7 +865,8 @@ namespace SimpleFileBrowser
 
 			validItems.Clear();
 
-			SelectedFile = null;
+			// SelectedFile = null;
+			ClearSelectedFile();
 
 			if( !showHiddenFilesToggle.isOn )
 				ignoredFileAttributes |= FileAttributes.Hidden;

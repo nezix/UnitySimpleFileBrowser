@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using System.Linq;
 
 namespace SimpleFileBrowser
 {
@@ -69,7 +70,7 @@ namespace SimpleFileBrowser
 			{
 				if( Time.realtimeSinceStartup - prevTouchTime < DOUBLE_CLICK_TIME )
 				{
-					if( fileBrowser.SelectedFilePosition == Position )
+					if(fileBrowser.SelectedFilePositions.Count != 0 && fileBrowser.SelectedFilePositions.Last() == Position )
 						fileBrowser.OnItemOpened( this );
 
 					prevTouchTime = Mathf.NegativeInfinity;
@@ -85,16 +86,18 @@ namespace SimpleFileBrowser
 		public void OnPointerEnter( PointerEventData eventData )
 		{
 #if UNITY_EDITOR || ( !UNITY_ANDROID && !UNITY_IOS )
-			if( fileBrowser.SelectedFilePosition != Position )
+			if(!fileBrowser.SelectedFilePositions.Contains(Position)){
 				background.color = fileBrowser.hoveredFileColor;
+			}
 #endif
 		}
 
 		public void OnPointerExit( PointerEventData eventData )
 		{
 #if UNITY_EDITOR || ( !UNITY_ANDROID && !UNITY_IOS )
-			if( fileBrowser.SelectedFilePosition != Position )
+			if(!fileBrowser.SelectedFilePositions.Contains(Position)){
 				background.color = fileBrowser.normalFileColor;
+			}
 #endif
 		}
 		#endregion
